@@ -3,74 +3,124 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chef Reset V1.5</title>
+    <title>Chef Smart Station V2.5 - Final Stable</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #0f172a; }
+        .order-card { border-left: 10px solid #3b82f6; background-color: #1e293b; }
+        video { width: 100%; border-radius: 1.5rem; border: 4px solid #334155; }
+    </style>
 </head>
-<body class="bg-black text-white p-4">
-    <div class="max-w-md mx-auto">
-        <h1 class="text-2xl font-bold text-center text-red-500 mb-6">👨‍🍳 Kitchen Emergency Reset</h1>
+<body class="text-white p-4 font-sans">
+    <div class="max-w-2xl mx-auto">
+        <h1 class="text-4xl font-black text-center mb-6 text-blue-400">👨‍🍳 Kitchen Console 2.5</h1>
         
-        <div class="bg-gray-900 p-4 rounded-xl mb-4 border border-gray-700">
-            <input type="password" id="key" placeholder="วางคีย์ใหม่ที่นี่..." class="w-full p-3 bg-gray-800 rounded mb-2">
-            <button onclick="testKey()" class="w-full bg-blue-600 p-3 rounded font-bold">1. ทดสอบคีย์</button>
+        <div id="setupArea" class="bg-slate-800 p-6 rounded-3xl border-2 border-blue-500 mb-6 shadow-2xl">
+            <h2 class="text-xl font-bold mb-4 text-center">🔑 ตั้งค่า API Key ใหม่</h2>
+            <input type="password" id="apiKeyInput" placeholder="วาง API Key จาก AI Studio ที่นี่..." class="w-full p-4 rounded-xl bg-slate-700 text-white border border-slate-600 mb-4 text-lg">
+            <div class="grid grid-cols-2 gap-4">
+                <button onclick="saveAndReload()" class="bg-blue-600 p-4 rounded-xl font-bold text-lg">บันทึกคีย์</button>
+                <button onclick="clearSavedKey()" class="bg-red-600 p-4 rounded-xl font-bold text-lg">ล้างคีย์เก่า</button>
+            </div>
         </div>
 
-        <div id="testStatus" class="text-center mb-4 text-sm text-gray-400 italic"></div>
-
-        <div class="relative mb-4">
-            <video id="v" autoplay playsinline class="w-full rounded-xl"></video>
-            <button id="scanBtn" onclick="scan()" class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-red-600 px-8 py-4 rounded-full font-bold shadow-lg hidden">2. SCAN</button>
+        <div class="relative mb-6">
+            <video id="video" autoplay playsinline muted></video>
+            <canvas id="canvas" class="hidden"></canvas>
+            <button onclick="captureAndScan()" id="snapBtn" class="absolute -bottom-6 left-1/2 transform -translate-x-1/2 bg-blue-600 w-24 h-24 rounded-full border-8 border-gray-900 shadow-2xl flex items-center justify-center active:scale-95 transition-all">
+                <span class="text-white font-black text-lg">SCAN</span>
+            </button>
         </div>
 
-        <div id="res" class="text-2xl font-bold p-4 bg-gray-800 rounded-xl min-h-[100px]">ผลลัพธ์จะขึ้นตรงนี้...</div>
+        <div id="status" class="text-center text-xl mt-8 mb-4 text-yellow-400 font-bold h-10 italic">พร้อมทำงาน...</div>
+        <div id="orderQueue" class="space-y-6 pb-24 text-3xl font-bold"></div>
     </div>
 
     <script>
-        const v = document.getElementById('v');
-        const res = document.getElementById('res');
-        const ts = document.getElementById('testStatus');
-        let currentKey = "";
+        // --- ส่วนสำคัญ: ล็อคชื่อรุ่นและ URL ให้ถูกต้อง ---
+        let API_KEY = localStorage.getItem('chef_api_key') || "";
+        const MODEL_NAME = "gemini-2.5-flash"; 
+        const API_URL = "https://generativelanguage.googleapis.com/v1/models/" + MODEL_NAME + ":generateContent";
 
-        navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}}).then(s=>v.srcObject=s);
+        if (API_KEY) document.getElementById('setupArea').classList.add('hidden');
 
-        async function testKey() {
-            currentKey = document.getElementById('key').value.trim();
-            ts.innerText = "กำลังทดสอบคีย์...";
+        function saveAndReload() {
+            const key = document.getElementById('apiKeyInput').value.trim();
+            if (key) { localStorage.setItem('chef_api_key', key); location.reload(); }
+        }
+
+        function clearSavedKey() {
+            localStorage.removeItem('chef_api_key');
+            location.reload();
+        }
+
+        async function setupCamera() {
             try {
-                // ทดสอบด้วยการส่งข้อความสั้นๆ
-                const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${currentKey}`, {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                document.getElementById('video').srcObject = stream;
+            } catch (err) { document.getElementById('status').innerText = "❌ เปิดกล้องไม่ได้"; }
+        }
+
+        async function captureAndScan() {
+            if (!API_KEY) return alert("กรุณาใส่ API Key ก่อนครับ!");
+
+            const status = document.getElementById('status');
+            const snapBtn = document.getElementById('snapBtn');
+            const canvas = document.getElementById('canvas');
+            const video = document.getElementById('video');
+
+            status.innerText = "🌀 กำลังวิเคราะห์ด้วย V2.5...";
+            snapBtn.disabled = true;
+            snapBtn.style.opacity = "0.5";
+
+            const context = canvas.getContext('2d');
+            canvas.width = 800;
+            canvas.height = video.videoHeight * (800 / video.videoWidth);
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const base64Data = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+
+            try {
+                // เรียกใช้ URL ที่ประกอบขึ้นจาก MODEL_NAME: gemini-2.5-flash
+                const response = await fetch(`${API_URL}?key=${API_KEY}`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({contents: [{parts: [{text: "hi"}]}]})
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [
+                            { text: "อ่านบิลสรุปเลขโต๊ะและเมนูสั้นๆ ถ้าไม่ใช่บิลตอบ IGNORE" },
+                            { inline_data: { mime_type: "image/jpeg", data: base64Data } }
+                        ]}]
+                    })
                 });
-                const d = await r.json();
-                if(d.error) throw new Error(d.error.message);
-                ts.innerText = "✅ คีย์ใช้ได้! ปุ่มสแกนเปิดแล้ว";
-                ts.className = "text-center mb-4 text-green-500 font-bold";
-                document.getElementById('scanBtn').classList.remove('hidden');
-            } catch(e) {
-                ts.innerText = "❌ คีย์ยังใช้ไม่ได้: " + e.message;
-                ts.className = "text-center mb-4 text-red-500 font-bold";
+
+                const data = await response.json();
+
+                if (data.error) throw new Error(data.error.message);
+                
+                if (data.candidates && data.candidates[0].content) {
+                    const result = data.candidates[0].content.parts[0].text.trim();
+                    if (result !== "IGNORE") {
+                        const queue = document.getElementById('orderQueue');
+                        queue.innerHTML = `<div class="order-card p-6 rounded-3xl mb-4 shadow-lg">${result.replace(/\n/g, '<br>')}</div>` + queue.innerHTML;
+                        status.innerText = "✅ บันทึกสำเร็จ!";
+                    } else {
+                        status.innerText = "⚠️ ไม่ใช่บิลครับเชฟ";
+                    }
+                } else {
+                    throw new Error("AI ไม่ตอบกลับ ลองตรวจสอบ API Key อีกครั้ง");
+                }
+
+            } catch (err) {
+                status.innerText = "❌ ผิดพลาด: " + err.message;
+                if (err.message.includes("not found")) {
+                    status.innerText = "❌ รุ่นโมเดลผิด หรือคีย์ยังไม่รองรับรุ่นนี้";
+                }
+            } finally {
+                snapBtn.disabled = false;
+                snapBtn.style.opacity = "1";
             }
         }
 
-        async function scan() {
-            res.innerText = "🌀 อ่านบิล...";
-            const canvas = document.createElement('canvas');
-            canvas.width = v.videoWidth; canvas.height = v.videoHeight;
-            canvas.getContext('2d').drawImage(v, 0, 0);
-            const b64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
-
-            try {
-                const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${currentKey}`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({contents: [{parts: [{text: "สรุปบิลสั้นๆ"}, {inline_data: {mime_type: "image/jpeg", data: b64}}]}]})
-                });
-                const d = await r.json();
-                res.innerText = d.candidates[0].content.parts[0].text;
-            } catch(e) { res.innerText = "❌ พัง: " + e.message; }
-        }
+        setupCamera();
     </script>
 </body>
 </html>
