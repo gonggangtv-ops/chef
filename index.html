@@ -3,30 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chef Smart Station - Secure V3</title>
+    <title>Chef Smart Station V3 - Final Fix</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-900 text-white p-4 font-sans text-lg">
+<body class="bg-slate-900 text-white p-4 font-sans">
     <div class="max-w-2xl mx-auto">
-        <h1 class="text-4xl font-black text-center mb-6 text-blue-400">👨‍🍳 Kitchen Console 2.5</h1>
+        <h1 class="text-3xl font-black text-center mb-6 text-blue-400">👨‍🍳 Kitchen Console 2.5</h1>
         
-        <div id="keySetting" class="bg-slate-800 p-4 rounded-xl mb-6 border-2 border-dashed border-blue-500">
-            <p class="text-sm mb-2 text-blue-200 text-center">🔑 ใส่ API Key ของเชฟตรงนี้ (ทำครั้งเดียว):</p>
-            <div class="flex gap-2">
-                <input type="password" id="inputKey" placeholder="AIzaSy..." class="flex-1 p-2 rounded bg-slate-700 border border-slate-600">
-                <button onclick="saveKey()" class="bg-blue-600 px-4 py-2 rounded font-bold">บันทึก</button>
+        <div id="setupArea" class="bg-slate-800 p-6 rounded-3xl border-2 border-blue-500 mb-6">
+            <h2 class="text-xl font-bold mb-4 text-center">🔑 ตั้งค่า API Key ใหม่</h2>
+            <input type="password" id="apiKeyInput" placeholder="วาง API Key ใหม่ที่นี่..." class="w-full p-4 rounded-xl bg-slate-700 text-white border border-slate-600 mb-4 text-lg">
+            <div class="grid grid-cols-2 gap-4">
+                <button onclick="saveAndReload()" class="bg-green-600 p-4 rounded-xl font-bold text-lg">ใช้คีย์นี้</button>
+                <button onclick="clearSavedKey()" class="bg-red-600 p-4 rounded-xl font-bold text-lg">ล้างคีย์เก่า</button>
             </div>
+            <p id="keyStatus" class="mt-4 text-center text-sm text-gray-400 italic">ถ้าขึ้น API key not valid ให้ลองสร้างคีย์ใหม่ครับ</p>
         </div>
 
         <div class="relative mb-6">
-            <video id="video" autoplay playsinline muted class="w-full rounded-2xl border-4 border-slate-700"></video>
+            <video id="video" autoplay playsinline muted class="w-full rounded-3xl border-4 border-slate-700"></video>
             <canvas id="canvas" class="hidden"></canvas>
-            <button onclick="captureAndScan()" id="snapBtn" class="absolute -bottom-6 left-1/2 transform -translate-x-1/2 bg-red-600 w-24 h-24 rounded-full border-8 border-gray-900 shadow-2xl flex items-center justify-center active:scale-95 transition-all">
-                <span class="text-white font-black text-lg">SCAN</span>
+            <button onclick="captureAndScan()" id="snapBtn" class="absolute -bottom-6 left-1/2 transform -translate-x-1/2 bg-blue-600 w-24 h-24 rounded-full border-8 border-slate-900 shadow-2xl flex items-center justify-center active:scale-95 transition-all">
+                <span class="text-white font-black text-lg font-bold">SCAN</span>
             </button>
         </div>
 
-        <div id="status" class="text-center text-xl mt-8 mb-4 text-yellow-400 font-bold h-10 italic font-bold">กรุณาใส่ API Key ก่อนใช้งาน</div>
+        <div id="status" class="text-center text-xl mt-8 mb-4 text-yellow-400 font-bold h-10 italic">พร้อมทำงาน...</div>
         <div id="orderQueue" class="space-y-6 pb-24 text-3xl font-bold"></div>
     </div>
 
@@ -35,36 +37,44 @@
         const MODEL_NAME = "gemini-2.5-flash"; 
 
         if (API_KEY) {
-            document.getElementById('keySetting').classList.add('hidden');
-            document.getElementById('status').innerText = "Gemini 2.5 พร้อมทำงาน!";
+            document.getElementById('setupArea').classList.add('hidden');
+            document.getElementById('status').innerText = "V.2.5 พร้อมสแกนแล้วครับเชฟ!";
         }
 
-        function saveKey() {
-            const val = document.getElementById('inputKey').value;
-            if (val) {
-                localStorage.setItem('chef_api_key', val);
-                API_KEY = val;
-                document.getElementById('keySetting').classList.add('hidden');
-                document.getElementById('status').innerText = "บันทึกคีย์แล้ว พร้อมทำงาน!";
+        function saveAndReload() {
+            const key = document.getElementById('apiKeyInput').value.trim();
+            if (key) {
+                localStorage.setItem('chef_api_key', key);
+                location.reload();
+            } else {
+                alert("กรุณาใส่คีย์ก่อนครับ");
             }
+        }
+
+        function clearSavedKey() {
+            localStorage.removeItem('chef_api_key');
+            location.reload();
         }
 
         async function setupCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
                 document.getElementById('video').srcObject = stream;
-            } catch (err) { alert("เปิดกล้องไม่ได้ครับ"); }
+            } catch (err) { document.getElementById('status').innerText = "❌ กล้องไม่ทำงาน"; }
         }
 
         async function captureAndScan() {
-            if (!API_KEY) return alert("กรุณาใส่ API Key ก่อนครับ!");
-            
-            const snapBtn = document.getElementById('snapBtn');
+            if (!API_KEY) {
+                alert("กรุณาตั้งค่า API Key ก่อนครับ");
+                return;
+            }
+
             const status = document.getElementById('status');
+            const snapBtn = document.getElementById('snapBtn');
             const canvas = document.getElementById('canvas');
             const video = document.getElementById('video');
 
-            status.innerText = "🌀 กำลังวิเคราะห์บิล...";
+            status.innerText = "🌀 กำลังส่งข้อมูล...";
             snapBtn.disabled = true;
             snapBtn.style.opacity = "0.5";
 
@@ -80,22 +90,30 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         contents: [{ parts: [
-                            { text: "อ่านบิลสรุปโต๊ะและเมนูสั้นๆ ถ้าไม่ใช่บิลตอบ IGNORE" },
+                            { text: "อ่านบิลสรุปเลขโต๊ะและเมนูสั้นๆ ถ้าไม่ใช่บิลตอบ IGNORE" },
                             { inline_data: { mime_type: "image/jpeg", data: base64Data } }
                         ]}]
                     })
                 });
 
                 const data = await response.json();
-                if (data.error) throw new Error(data.error.message);
+                
+                if (data.error) {
+                    if (data.error.message.includes("API key not valid")) {
+                        status.innerText = "❌ คีย์ใช้ไม่ได้ กรุณากด 'ล้างคีย์เก่า' แล้วใส่ใหม่";
+                        document.getElementById('setupArea').classList.remove('hidden');
+                    } else {
+                        throw new Error(data.error.message);
+                    }
+                }
 
                 const result = data.candidates[0].content.parts[0].text.trim();
                 if (result !== "IGNORE") {
                     const queue = document.getElementById('orderQueue');
-                    queue.innerHTML = `<div class="bg-slate-800 p-6 rounded-2xl border-l-8 border-blue-500 mb-4">${result.replace(/\n/g, '<br>')}</div>` + queue.innerHTML;
-                    status.innerText = "✅ บันทึกแล้ว!";
+                    queue.innerHTML = `<div class="bg-slate-800 p-6 rounded-3xl border-l-8 border-green-500 mb-4 animate-pulse">${result.replace(/\n/g, '<br>')}</div>` + queue.innerHTML;
+                    status.innerText = "✅ บันทึกสำเร็จ!";
                 } else {
-                    status.innerText = "⚠️ ไม่ใช่บิล";
+                    status.innerText = "⚠️ ภาพไม่ชัด หรือไม่ใช่บิลครับ";
                 }
             } catch (err) {
                 status.innerText = "❌ พัง: " + err.message;
