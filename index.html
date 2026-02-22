@@ -57,7 +57,7 @@
         </div>
     </div>
 
-   <script>
+ <script>
     let API_KEY = localStorage.getItem('chef_api_key') || "";
     const MODEL = "gemini-2.5-flash";
 
@@ -96,7 +96,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     contents: [{ parts: [
-                        { text: "สรุปบิลนี้: บรรทัดแรกเลขโต๊ะ, บรรทัดต่อๆไปคือรายการและจำนวน **ห้ามใช้เครื่องหมาย () และ + โดยเด็ดขาด** ให้ใช้แค่ตัวอักษรและตัวเลขเท่านั้น ถ้าไม่ใช่บิลตอบ IGNORE" },
+                        { text: "สรุปบิลนี้: บรรทัดแรกเลขโต๊ะ, บรรทัดต่อๆไปคือรายการอาหารและคำสั่งพิเศษ สรุปให้อยู่ในบรรทัดเดียวกันต่อ 1 เมนู ห้ามใช้เครื่องหมาย ( ) และ + ถ้ามีให้เขียนเว้นวรรคแทน ถ้าไม่ใช่บิลตอบ IGNORE" },
                         { inline_data: { mime_type: "image/jpeg", data: base64Data } }
                     ]}]
                 })
@@ -105,8 +105,8 @@
             const result = data.candidates[0].content.parts[0].text.trim();
 
             if (result !== "IGNORE") {
-                // ตัดเครื่องหมาย () และ + ออกด้วย JavaScript อีกชั้นเพื่อความชัวร์
-                const cleanResult = result.replace(/[()+]/g, '');
+                // ลบเฉพาะตัวเครื่องหมายออก แต่เก็บข้อความข้างในไว้
+                const cleanResult = result.replace(/[()+]/g, ' '); 
                 addOrderToUI(cleanResult);
                 status.innerText = "● SYSTEM ONLINE";
                 status.className = "text-green-400 font-bold italic";
@@ -125,8 +125,9 @@
         if (queue.innerText.includes("ยังไม่มีออเดอร์เข้า")) queue.innerHTML = "";
 
         const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        const lines = text.split('\n');
+        const lines = text.split('\n').filter(line => line.trim() !== "");
         const table = lines[0];
+        // รวมรายการอาหารแต่ละบรรทัดเข้าด้วยกัน
         const items = lines.slice(1).join('<br>');
 
         const card = document.createElement('div');
@@ -136,7 +137,7 @@
                 <div class="text-4xl font-black text-yellow-400 mb-2 uppercase">${table}</div>
                 <div class="text-slate-500 font-bold">${time}</div>
             </div>
-            <div class="text-3xl font-bold text-white leading-snug">${items}</div>
+            <div class="text-3xl font-bold text-white leading-tight">${items}</div>
             <button onclick="this.parentElement.remove()" class="absolute -top-2 -right-2 bg-red-500 w-10 h-10 rounded-full flex items-center justify-center font-bold shadow-lg">✕</button>
         `;
         queue.prepend(card);
@@ -149,5 +150,6 @@
 
     setupCamera();
 </script>
+              
 </body>
 </html>
