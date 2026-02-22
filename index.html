@@ -3,153 +3,137 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chef Pro Dashboard V2.5</title>
+    <title>Chef Horizontal Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@400;700;900&display=swap');
         body { font-family: 'Prompt', sans-serif; background-color: #020617; }
+        
+        /* สไตล์การ์ดบิลแนวนอน */
         .bill-card { 
+            min-width: 250px;
+            max-width: 300px;
             background: #1e293b;
-            border-left: 12px solid #3b82f6;
-            animation: slideIn 0.3s ease-out;
+            border-top: 10px solid #3b82f6; /* เปลี่ยนมาเน้นที่ขอบบน */
+            animation: fadeIn 0.3s ease-out;
         }
-        .new-order { animation: pulseBorder 2s infinite; }
-        @keyframes pulseBorder {
-            0% { border-left-color: #3b82f6; }
-            50% { border-left-color: #fbbf24; }
-            100% { border-left-color: #3b82f6; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-        @keyframes slideIn {
-            from { transform: translateX(50px); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
+        /* ซ่อน Scrollbar แต่ยังเลื่อนได้ */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
 <body class="text-white p-4">
-    <div class="max-w-3xl mx-auto">
-        <div class="flex justify-between items-center mb-6 bg-slate-800 p-4 rounded-2xl shadow-lg border-b-4 border-blue-500">
-            <div>
-                <h1 class="text-3xl font-black text-blue-400">COMMAND CENTER</h1>
-                <p id="status" class="text-green-400 font-bold italic">● SYSTEM ONLINE</p>
-            </div>
-            <div class="text-right">
-                <button onclick="clearSavedKey()" class="text-xs text-slate-500 underline">เปลี่ยน Key</button>
+    <div class="max-w-full mx-auto">
+        <div class="flex justify-between items-center mb-4 bg-slate-800 p-3 rounded-xl border-b-2 border-blue-500">
+            <h1 class="text-xl font-black text-blue-400 uppercase">Horizontal Kitchen View</h1>
+            <p id="status" class="text-green-400 text-sm font-bold italic">● READY</p>
+        </div>
+
+        <div class="flex justify-center mb-6">
+            <div class="relative w-full max-w-md">
+                <video id="video" autoplay playsinline muted class="w-full rounded-2xl border-2 border-slate-700"></video>
+                <canvas id="canvas" class="hidden"></canvas>
+                <button onclick="captureAndScan()" id="snapBtn" class="absolute -bottom-5 left-1/2 transform -translate-x-1/2 bg-blue-600 w-16 h-16 rounded-full border-4 border-slate-900 shadow-xl flex items-center justify-center active:scale-90 transition-all">
+                    <span class="text-white font-black text-xs">SCAN</span>
+                </button>
             </div>
         </div>
 
-        <div class="relative mb-8 group">
-            <video id="video" autoplay playsinline muted class="w-full rounded-3xl border-4 border-slate-700 shadow-2xl transition-all group-hover:border-blue-500"></video>
-            <canvas id="canvas" class="hidden"></canvas>
-            <button onclick="captureAndScan()" id="snapBtn" class="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-blue-600 hover:bg-blue-500 w-28 h-28 rounded-full border-8 border-slate-900 shadow-2xl flex items-center justify-center active:scale-90 transition-all">
-                <span class="text-white font-black text-xl">SCAN</span>
-            </button>
-        </div>
-
-        <div class="mt-12 space-y-6">
-            <div class="flex justify-between items-end border-b-2 border-slate-700 pb-2">
-                <h2 class="text-2xl font-black text-slate-400 uppercase">Current Orders</h2>
-                <button onclick="clearOrders()" class="text-red-500 font-bold hover:text-red-400">CLEAR ALL</button>
+        <div class="mt-8">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold text-slate-400">ACTIVE BILLS (เรียงตามสแกน)</h2>
+                <button onclick="clearOrders()" class="text-red-500 text-sm font-bold">CLEAR ALL</button>
             </div>
             
-            <div id="orderQueue" class="space-y-4 pb-32">
-                <div class="text-center text-slate-600 py-10 italic text-xl">ยังไม่มีออเดอร์เข้า...</div>
+            <div id="orderQueue" class="flex flex-wrap gap-4 pb-20 justify-start">
+                <div class="text-slate-600 italic">สแกนบิลเพื่อเริ่มรายการ...</div>
             </div>
         </div>
     </div>
 
- <script>
-    let API_KEY = localStorage.getItem('chef_api_key') || "";
-    const MODEL = "gemini-2.5-flash";
+    <script>
+        let API_KEY = localStorage.getItem('chef_api_key') || "";
+        const MODEL = "gemini-2.5-flash";
 
-    async function setupCamera() {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: "environment", width: { ideal: 1280 } } 
-            });
-            document.getElementById('video').srcObject = stream;
-        } catch (err) { alert("Camera error: " + err.message); }
-    }
-
-    async function captureAndScan() {
-        if(!API_KEY) {
-            const key = prompt("กรุณาใส่ API Key ของเชฟครับ:");
-            if(key) { localStorage.setItem('chef_api_key', key); location.reload(); }
-            return;
+        async function setupCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "environment" } 
+                });
+                document.getElementById('video').srcObject = stream;
+            } catch (err) { alert("Camera error"); }
         }
 
-        const status = document.getElementById('status');
-        const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
-
-        status.innerText = "🌀 ANALYZING...";
-        status.className = "text-yellow-400 font-bold italic animate-pulse";
-
-        const context = canvas.getContext('2d');
-        canvas.width = 1024;
-        canvas.height = video.videoHeight * (1024 / video.videoWidth);
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const base64Data = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
-
-        try {
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/${MODEL}:generateContent?key=${API_KEY}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ parts: [
-                        { text: "สรุปบิลนี้: บรรทัดแรกเลขโต๊ะ, บรรทัดต่อๆไปคือรายการอาหารและคำสั่งพิเศษ สรุปให้อยู่ในบรรทัดเดียวกันต่อ 1 เมนู ห้ามใช้เครื่องหมาย ( ) และ + ถ้ามีให้เขียนเว้นวรรคแทน ถ้าไม่ใช่บิลตอบ IGNORE" },
-                        { inline_data: { mime_type: "image/jpeg", data: base64Data } }
-                    ]}]
-                })
-            });
-            const data = await response.json();
-            const result = data.candidates[0].content.parts[0].text.trim();
-
-            if (result !== "IGNORE") {
-                // ลบเฉพาะตัวเครื่องหมายออก แต่เก็บข้อความข้างในไว้
-                const cleanResult = result.replace(/[()+]/g, ' '); 
-                addOrderToUI(cleanResult);
-                status.innerText = "● SYSTEM ONLINE";
-                status.className = "text-green-400 font-bold italic";
-            } else {
-                status.innerText = "⚠️ NOT A BILL";
-                status.className = "text-red-400 font-bold italic";
+        async function captureAndScan() {
+            if(!API_KEY) {
+                const key = prompt("ใส่ API Key ของเชฟ:");
+                if(key) { localStorage.setItem('chef_api_key', key); location.reload(); }
+                return;
             }
-        } catch (e) { 
-            status.innerText = "❌ ERROR: TRY AGAIN";
-            status.className = "text-red-500 font-bold";
+
+            const status = document.getElementById('status');
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
+
+            status.innerText = "🌀 SCANNING...";
+
+            const context = canvas.getContext('2d');
+            canvas.width = 1024;
+            canvas.height = video.videoHeight * (1024 / video.videoWidth);
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const base64Data = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/${MODEL}:generateContent?key=${API_KEY}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [
+                            { text: "สรุปบิลนี้: บรรทัดแรกเลขโต๊ะ, บรรทัดต่อๆไปคือรายการและจำนวน ยุบคำสั่งพิเศษในวงเล็บมาต่อท้ายเมนูบรรทัดเดียวกัน ห้ามใส่เครื่องหมาย () และ + ถ้าไม่ใช่บิลตอบ IGNORE" },
+                            { inline_data: { mime_type: "image/jpeg", data: base64Data } }
+                        ]}]
+                    })
+                });
+                const data = await response.json();
+                const result = data.candidates[0].content.parts[0].text.trim();
+
+                if (result !== "IGNORE") {
+                    addOrderToUI(result.replace(/[()+]/g, ' '));
+                    status.innerText = "● READY";
+                } else {
+                    status.innerText = "⚠️ TRY AGAIN";
+                }
+            } catch (e) { 
+                status.innerText = "❌ ERROR";
+            }
         }
-    }
 
-    function addOrderToUI(text) {
-        const queue = document.getElementById('orderQueue');
-        if (queue.innerText.includes("ยังไม่มีออเดอร์เข้า")) queue.innerHTML = "";
+        function addOrderToUI(text) {
+            const queue = document.getElementById('orderQueue');
+            if (queue.innerText.includes("สแกนบิล")) queue.innerHTML = "";
 
-        const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        const lines = text.split('\n').filter(line => line.trim() !== "");
-        const table = lines[0];
-        // รวมรายการอาหารแต่ละบรรทัดเข้าด้วยกัน
-        const items = lines.slice(1).join('<br>');
+            const lines = text.split('\n').filter(l => l.trim() !== "");
+            const table = lines[0];
+            const items = lines.slice(1).join('<br>');
 
-        const card = document.createElement('div');
-        card.className = "bill-card p-6 rounded-2xl shadow-2xl relative new-order mb-4";
-        card.innerHTML = `
-            <div class="flex justify-between items-start">
-                <div class="text-4xl font-black text-yellow-400 mb-2 uppercase">${table}</div>
-                <div class="text-slate-500 font-bold">${time}</div>
-            </div>
-            <div class="text-3xl font-bold text-white leading-tight">${items}</div>
-            <button onclick="this.parentElement.remove()" class="absolute -top-2 -right-2 bg-red-500 w-10 h-10 rounded-full flex items-center justify-center font-bold shadow-lg">✕</button>
-        `;
-        queue.prepend(card);
-        
-        setTimeout(() => card.classList.remove('new-order'), 10000);
-    }
+            const card = document.createElement('div');
+            card.className = "bill-card p-4 rounded-xl shadow-lg relative flex-none";
+            card.innerHTML = `
+                <div class="text-3xl font-black text-yellow-400 border-b border-slate-600 mb-2 pb-1">${table}</div>
+                <div class="text-xl font-bold text-white leading-tight min-h-[60px]">${items}</div>
+                <button onclick="this.parentElement.remove()" class="absolute -top-3 -right-3 bg-red-600 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-md">✕</button>
+            `;
+            // ใช้ appendChild เพื่อให้บิลใหม่ต่อท้าย (เรียงตามลำดับนับจากการสแกน)
+            queue.appendChild(card);
+        }
 
-    function clearOrders() { if(confirm("ล้างคิวทั้งหมด?")) document.getElementById('orderQueue').innerHTML = ""; }
-    function clearSavedKey() { localStorage.removeItem('chef_api_key'); location.reload(); }
+        function clearOrders() { if(confirm("ล้างทั้งหมด?")) document.getElementById('orderQueue').innerHTML = ""; }
 
-    setupCamera();
-</script>
-              
+        setupCamera();
+    </script>
 </body>
 </html>
