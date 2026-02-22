@@ -3,157 +3,74 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chef Smart Station V2.5 - Stable</title>
+    <title>Chef Reset V1.5</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body { background-color: #0f172a; }
-        .order-card { border-left: 10px solid #10b981; background-color: #1e293b; }
-        video { width: 100%; border-radius: 1.5rem; border: 4px solid #334155; }
-        .summary-box { background: linear-gradient(135deg, #064e3b 0%, #065f46 100%); border: 3px solid #10b981; }
-    </style>
 </head>
-<body class="text-white p-4 font-sans">
-    <div class="max-w-2xl mx-auto">
-        <h1 class="text-4xl font-black text-center mb-6 text-blue-400 uppercase italic">👨‍🍳 Kitchen Console 2.5</h1>
+<body class="bg-black text-white p-4">
+    <div class="max-w-md mx-auto">
+        <h1 class="text-2xl font-bold text-center text-red-500 mb-6">👨‍🍳 Kitchen Emergency Reset</h1>
         
-        <div id="setupArea" class="bg-slate-800 p-6 rounded-3xl border-2 border-blue-500 mb-6 shadow-2xl">
-            <h2 class="text-xl font-bold mb-4 text-center">🔑 ตั้งค่า API Key (V2.5)</h2>
-            <input type="password" id="apiKeyInput" placeholder="วาง API Key ใหม่ที่นี่..." class="w-full p-4 rounded-xl bg-slate-700 text-white border border-slate-600 mb-4 text-lg">
-            <div class="grid grid-cols-2 gap-4">
-                <button onclick="saveAndReload()" class="bg-blue-600 p-4 rounded-xl font-bold text-lg hover:bg-blue-500">บันทึกคีย์</button>
-                <button onclick="clearSavedKey()" class="bg-gray-600 p-4 rounded-xl font-bold text-lg hover:bg-gray-500">ล้างคีย์เก่า</button>
-            </div>
-            <p class="mt-4 text-center text-sm text-gray-400">ถ้าขึ้น Error ให้กด 'ล้างคีย์เก่า' แล้วสร้าง Key ใหม่จาก AI Studio ครับ</p>
+        <div class="bg-gray-900 p-4 rounded-xl mb-4 border border-gray-700">
+            <input type="password" id="key" placeholder="วางคีย์ใหม่ที่นี่..." class="w-full p-3 bg-gray-800 rounded mb-2">
+            <button onclick="testKey()" class="w-full bg-blue-600 p-3 rounded font-bold">1. ทดสอบคีย์</button>
         </div>
 
-        <div class="relative mb-6">
-            <video id="video" autoplay playsinline muted></video>
-            <canvas id="canvas" class="hidden"></canvas>
-            <button onclick="captureAndScan()" id="snapBtn" class="absolute -bottom-6 left-1/2 transform -translate-x-1/2 bg-red-600 w-24 h-24 rounded-full border-8 border-gray-900 shadow-2xl flex items-center justify-center active:scale-95 transition-all">
-                <span class="text-white font-black text-lg">SCAN</span>
-            </button>
+        <div id="testStatus" class="text-center mb-4 text-sm text-gray-400 italic"></div>
+
+        <div class="relative mb-4">
+            <video id="v" autoplay playsinline class="w-full rounded-xl"></video>
+            <button id="scanBtn" onclick="scan()" class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-red-600 px-8 py-4 rounded-full font-bold shadow-lg hidden">2. SCAN</button>
         </div>
 
-        <div id="status" class="text-center text-xl mt-8 mb-4 text-yellow-400 font-bold h-10 italic">พร้อมทำงาน...</div>
-
-        <div class="flex justify-between items-end mb-4 border-b-2 border-gray-700 pb-2">
-            <h3 class="text-2xl font-bold">📋 ออเดอร์ล่าสุด</h3>
-            <button onclick="clearOrders()" class="text-red-500 font-bold">ล้างคิว</button>
-        </div>
-
-        <div id="orderQueue" class="space-y-6 pb-24 text-3xl font-bold"></div>
+        <div id="res" class="text-2xl font-bold p-4 bg-gray-800 rounded-xl min-h-[100px]">ผลลัพธ์จะขึ้นตรงนี้...</div>
     </div>
 
     <script>
-        let API_KEY = localStorage.getItem('chef_api_key') || "";
-        const MODEL_NAME = "gemini-2.5-flash"; 
+        const v = document.getElementById('v');
+        const res = document.getElementById('res');
+        const ts = document.getElementById('testStatus');
+        let currentKey = "";
 
-        if (API_KEY) {
-            document.getElementById('setupArea').classList.add('hidden');
-        }
+        navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}}).then(s=>v.srcObject=s);
 
-        function saveAndReload() {
-            const key = document.getElementById('apiKeyInput').value.trim();
-            if (key) {
-                localStorage.setItem('chef_api_key', key);
-                location.reload();
-            }
-        }
-
-        function clearSavedKey() {
-            localStorage.removeItem('chef_api_key');
-            location.reload();
-        }
-
-        async function setupCamera() {
+        async function testKey() {
+            currentKey = document.getElementById('key').value.trim();
+            ts.innerText = "กำลังทดสอบคีย์...";
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "environment", width: { ideal: 1280 } } 
-                });
-                document.getElementById('video').srcObject = stream;
-            } catch (err) {
-                document.getElementById('status').innerText = "❌ เปิดกล้องไม่ได้";
-            }
-        }
-
-        async function captureAndScan() {
-            if (!API_KEY) {
-                alert("กรุณาใส่ API Key ก่อนครับเชฟ!");
-                return;
-            }
-
-            const status = document.getElementById('status');
-            const snapBtn = document.getElementById('snapBtn');
-            const canvas = document.getElementById('canvas');
-            const video = document.getElementById('video');
-
-            status.innerText = "🌀 กำลังส่งข้อมูลให้ V2.5...";
-            snapBtn.disabled = true;
-            snapBtn.style.opacity = "0.5";
-
-            const context = canvas.getContext('2d');
-            canvas.width = 800;
-            canvas.height = video.videoHeight * (800 / video.videoWidth);
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const base64Data = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
-
-            try {
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/${MODEL_NAME}:generateContent?key=${API_KEY}`, {
+                // ทดสอบด้วยการส่งข้อความสั้นๆ
+                const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${currentKey}`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{ parts: [
-                            { text: "สรุปเลขโต๊ะและรายการอาหารสั้นๆ จากบิลนี้ ถ้าไม่ใช่บิลตอบ IGNORE" },
-                            { inline_data: { mime_type: "image/jpeg", data: base64Data } }
-                        ]}]
-                    })
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({contents: [{parts: [{text: "hi"}]}]})
                 });
-
-                const data = await response.json();
-
-                // --- ตรวจสอบ Error อย่างละเอียดเพื่อกันอาการ 'reading 0' ---
-                if (data.error) {
-                    throw new Error(data.error.message);
-                }
-
-                if (!data.candidates || data.candidates.length === 0 || !data.candidates[0].content) {
-                    throw new Error("AI ตอบกลับไม่ครบถ้วน ลองถ่ายใหม่อีกครั้งครับ");
-                }
-
-                const result = data.candidates[0].content.parts[0].text.trim();
-
-                if (result !== "IGNORE") {
-                    const queue = document.getElementById('orderQueue');
-                    const time = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-                    queue.innerHTML = `
-                        <div class="order-card p-6 rounded-3xl mb-4 relative shadow-lg">
-                            <div class="text-sm text-gray-500 mb-2">${time}</div>
-                            <div>${result.replace(/\n/g, '<br>')}</div>
-                        </div>
-                    ` + queue.innerHTML;
-                    status.innerText = "✅ บันทึกออเดอร์แล้ว!";
-                } else {
-                    status.innerText = "⚠️ ไม่ใช่บิล หรือภาพไม่ชัด";
-                }
-
-            } catch (err) {
-                status.innerText = "❌ ผิดพลาด: " + err.message;
-                if (err.message.includes("API key not valid")) {
-                    document.getElementById('setupArea').classList.remove('hidden');
-                }
-            } finally {
-                snapBtn.disabled = false;
-                snapBtn.style.opacity = "1";
+                const d = await r.json();
+                if(d.error) throw new Error(d.error.message);
+                ts.innerText = "✅ คีย์ใช้ได้! ปุ่มสแกนเปิดแล้ว";
+                ts.className = "text-center mb-4 text-green-500 font-bold";
+                document.getElementById('scanBtn').classList.remove('hidden');
+            } catch(e) {
+                ts.innerText = "❌ คีย์ยังใช้ไม่ได้: " + e.message;
+                ts.className = "text-center mb-4 text-red-500 font-bold";
             }
         }
 
-        function clearOrders() {
-            if(confirm("ล้างออเดอร์ทั้งหมด?")) {
-                document.getElementById('orderQueue').innerHTML = "";
-            }
-        }
+        async function scan() {
+            res.innerText = "🌀 อ่านบิล...";
+            const canvas = document.createElement('canvas');
+            canvas.width = v.videoWidth; canvas.height = v.videoHeight;
+            canvas.getContext('2d').drawImage(v, 0, 0);
+            const b64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
 
-        setupCamera();
+            try {
+                const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${currentKey}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({contents: [{parts: [{text: "สรุปบิลสั้นๆ"}, {inline_data: {mime_type: "image/jpeg", data: b64}}]}]})
+                });
+                const d = await r.json();
+                res.innerText = d.candidates[0].content.parts[0].text;
+            } catch(e) { res.innerText = "❌ พัง: " + e.message; }
+        }
     </script>
 </body>
 </html>
